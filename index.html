@@ -534,22 +534,22 @@
   		display: none; /* 隐藏文字標籤 */
   	}
 	/* 🌟 自訂排行榜滑動條 (Scrollbar) 樣式 */
-    #leaderboardList {
+    #leaderboardList, #preLeaderboardList {
         -webkit-overflow-scrolling: touch; /* 確保 iOS 滑動順暢 */
     }
-    #leaderboardList::-webkit-scrollbar {
-        -webkit-appearance: none; /* 🌟 破解手機隱藏限制嘅關鍵！ */
-        width: 8px; /* 滑動條嘅闊度稍微加粗少少，方便手機㩒 */
-        display: block; /* 強制顯示 */
+    #leaderboardList::-webkit-scrollbar, #preLeaderboardList::-webkit-scrollbar {
+        -webkit-appearance: none; 
+        width: 8px; 
+        display: block; 
     }
-    #leaderboardList::-webkit-scrollbar-track {
-        background: rgba(255, 255, 255, 0.15); /* 滑動軌道嘅底色 */
+    #leaderboardList::-webkit-scrollbar-track, #preLeaderboardList::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.15); 
         border-radius: 4px;
     }
-    #leaderboardList::-webkit-scrollbar-thumb {
-        background: #ffd700; /* 滑動條本體嘅顏色（黃金色） */
+    #leaderboardList::-webkit-scrollbar-thumb, #preLeaderboardList::-webkit-scrollbar-thumb {
+        background: #ffd700; 
         border-radius: 4px;
-        border: 1px solid rgba(0,0,0,0.2); /* 加條幼邊，令佢更立體突出 */
+        border: 1px solid rgba(0,0,0,0.2); 
     }
   </style>
   
@@ -759,9 +759,20 @@
     <h2>輸入資料</h2>
     <input type="text" id="playerName" placeholder="請輸入姓名" maxlength="20">
     <input type="tel" id="playerPhone" placeholder="請輸入 8 位數字電話" maxlength="8">
-    <button id="startGameBtn">開始遊戲</button>
+   <button id="startGameBtn">開始遊戲</button>
+    <button id="viewPreLeaderboardBtn" style="margin-top: 12px; background: linear-gradient(135deg, #444, #222); color: #ffd700; box-shadow: 0 3px 8px rgba(0,0,0,0.5); border: 1px solid #666;">🏆 查看排行榜</button>
   </div>
   <img src="PUSH TO THE MAX.png" style="position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); width: 85%; max-width: 350px; pointer-events: none;">
+</div>
+
+<div id="preLeaderboardPopup" class="popup-overlay" style="position:absolute; z-index: 1004;">
+  <div class="popup-content" style="max-width: 360px; width: 92%;">
+    <h2 style="margin-bottom: 15px; color:#ffd700; text-shadow:0 0 10px #000;">TOP 20 排行榜</h2>
+    <div style="width: 100%; background: rgba(0,0,0,0.4); border: 2px solid rgba(255,215,0,0.4); border-radius: 12px; overflow: hidden; margin-bottom: 20px;">
+      <div id="preLeaderboardList" style="padding: 0; max-height: 350px; overflow-y: scroll;"></div>
+    </div>
+    <button id="closePreLeaderboardBtn" style="background: linear-gradient(135deg, #888, #555); color: #fff;">關閉</button>
+  </div>
 </div>
 
 <!-- ========== LOADING SCREEN (賽車在進度條上跑) ========== -->
@@ -885,7 +896,7 @@
   "></div>
 
   <button id="playAgainBtn">再戰一場</button>
-  <img src="PUSH TO THE MAX.png" style="position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); width: 85%; max-width: 350px; pointer-events: none;">
+  <img src="PUSH TO THE MAX.png" style="position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); width: 85%; max-width: 350px; pointer-events: none;">
 </div>
 
   <div id="racer">
@@ -1193,7 +1204,7 @@ var REAL_CAR_WIDTH = 80;
 SPRITES.SCALE = 0.38 * (1 / REAL_CAR_WIDTH);
 SPRITES.BILLBOARDS = [SPRITES.BILLBOARD01, SPRITES.BILLBOARD02, SPRITES.BILLBOARD03, SPRITES.BILLBOARD04, SPRITES.BILLBOARD05, SPRITES.BILLBOARD06, SPRITES.BILLBOARD07, SPRITES.BILLBOARD08, SPRITES.BILLBOARD09];
 SPRITES.PLANTS     = [SPRITES.TREE1, SPRITES.TREE2, SPRITES.DEAD_TREE1, SPRITES.DEAD_TREE2, SPRITES.PALM_TREE, SPRITES.BUSH2, SPRITES.CACTUS, SPRITES.STUMP, SPRITES.BOULDER1, SPRITES.BOULDER2];
-SPRITES.CARS       = [SPRITES.CAR01, SPRITES.CAR02, SPRITES.CAR03, SPRITES.CAR04, SPRITES.CAR05, SPRITES.SEMI, SPRITES.TRUCK]; // 🌟 加入咗 SPRITES.CAR05
+SPRITES.CARS       = [SPRITES.CAR01, SPRITES.CAR02, SPRITES.CAR03, SPRITES.CAR04, SPRITES.CAR05, SPRITES.CAR05, SPRITES.CAR05, SPRITES.SEMI, SPRITES.TRUCK]; // 🌟 增加 CAR05 出現機率
 
 
 // =========================================================================
@@ -1288,6 +1299,59 @@ Render.background = function(ctx, background, width, height, layer, rotation, of
       var remainDestW = Math.floor(remainW * scaleRatio);
       ctx.drawImage(background, layer.x, sourceY, remainW, sourceH, destW - 1, destY, remainDestW + 1, destH);
     }
+};
+// =========================================================================
+// 🌟 核心整合 4：覆寫 Render.segment 支援真正的黑白格仔線，唔影響草地
+// =========================================================================
+Render.segment = function(ctx, width, lanes, x1, y1, w1, x2, y2, w2, fog, color) {
+    var r1 = Render.rumbleWidth(w1, lanes),
+        r2 = Render.rumbleWidth(w2, lanes),
+        l1 = Render.laneMarkerWidth(w1, lanes),
+        l2 = Render.laneMarkerWidth(w2, lanes),
+        lanew1, lanew2, lanex1, lanex2, lane;
+
+    // 1. 畫兩旁草地 (完美保留原本顏色)
+    ctx.fillStyle = color.grass;
+    ctx.fillRect(0, y2, width, y1 - y2);
+
+    // 2. 畫兩旁紅白路肩
+    Render.polygon(ctx, x1-w1-r1, y1, x1-w1, y1, x2-w2, y2, x2-w2-r2, y2, color.rumble);
+    Render.polygon(ctx, x1+w1+r1, y1, x1+w1, y1, x2+w2, y2, x2+w2+r2, y2, color.rumble);
+
+    // 3. 畫馬路 (判斷是否需要畫格仔)
+    if (color.checker) {
+        var cols = 10; // 格仔數量，可以改大改細
+        var cw1 = (w1 * 2) / cols;
+        var cw2 = (w2 * 2) / cols;
+        var cx1 = x1 - w1;
+        var cx2 = x2 - w2;
+        for (var c = 0; c < cols; c++) {
+            var isBlack = (c % 2 === 0);
+            if (color.checkerReverse) isBlack = !isBlack;
+            ctx.fillStyle = isBlack ? '#222222' : '#ffffff';
+            ctx.beginPath();
+            ctx.moveTo(cx1 + c*cw1, y1);
+            ctx.lineTo(cx1 + (c+1)*cw1, y1);
+            ctx.lineTo(cx2 + (c+1)*cw2, y2);
+            ctx.lineTo(cx2 + c*cw2, y2);
+            ctx.fill();
+        }
+    } else {
+        // 普通馬路
+        Render.polygon(ctx, x1-w1, y1, x1+w1, y1, x2+w2, y2, x2-w2, y2, color.road);
+    }
+
+    // 4. 畫行車白線 (如果有格仔就唔畫白線)
+    if (color.lane && !color.checker) {
+      lanew1 = w1*2/lanes;
+      lanew2 = w2*2/lanes;
+      lanex1 = x1 - w1 + lanew1;
+      lanex2 = x2 - w2 + lanew2;
+      for(lane = 1 ; lane < lanes ; lanex1 += lanew1, lanex2 += lanew2, lane++)
+        Render.polygon(ctx, lanex1 - l1/2, y1, lanex1 + l1/2, y1, lanex2 + l2/2, y2, lanex2 - l2/2, y2, color.lane);
+    }
+
+    Render.fog(ctx, 0, y1, width, y1-y2, fog);
 };
 
 // ========== GAME STATE MANAGEMENT ==========
@@ -1436,6 +1500,40 @@ function showRegPopup() {
     showGameLoading(); // 顯示賽車 Loading 動畫
   };
 }
+// ========== 賽前排行榜按鈕邏輯 ==========
+document.getElementById('viewPreLeaderboardBtn').onclick = function() {
+    if(typeof playClickSound === 'function') playClickSound();
+    var list = document.getElementById('preLeaderboardList');
+    var data = [];
+    try { data = JSON.parse(localStorage.getItem(LEADERBOARD_KEY) || '[]'); } catch(e) {}
+    
+    var top20 = data.slice(0, 20);
+    var html = '';
+    var medals = ['🥇', '🥈', '🥉'];
+    if (top20.length === 0) {
+        html = '<div style="padding:20px; text-align:center; color:#ccc;">暫無紀錄，快來成為第一名！</div>';
+    } else {
+        for (var j = 0; j < top20.length; j++) {
+            var entry = top20[j];
+            var rank = j + 1;
+            var medal = medals[j] || ('#' + rank);
+            var rowBg = j % 2 === 0 ? 'rgba(255,255,255,0.04)' : 'transparent';
+            html += '<div style="display:flex; align-items:center; padding:7px 12px; background:' + rowBg + '; border-bottom:1px solid rgba(255,255,255,0.06);">';
+            html += '<span style="width:36px; font-size:1.1em; text-align:center;">' + medal + '</span>';
+            html += '<span style="flex:1; font-size:0.9em; color:#fff;">' + entry.name + '</span>';
+            html += '<span style="width:80px; font-size:0.8em; color:rgba(255,255,255,0.6); text-align:center;">' + maskPhone(entry.phone) + '</span>';
+            html += '<span style="width:70px; font-size:0.95em; color:#ffd700; font-weight:bold; text-align:right;">' + entry.score + '</span>';
+            html += '</div>';
+        }
+    }
+    list.innerHTML = html;
+    document.getElementById('preLeaderboardPopup').style.display = 'flex';
+};
+
+document.getElementById('closePreLeaderboardBtn').onclick = function() {
+    if(typeof playClickSound === 'function') playClickSound();
+    document.getElementById('preLeaderboardPopup').style.display = 'none';
+};
 
 // ========== GAME LOADING ANIMATION (賽車在進度條上跑) ==========
 function showGameLoading() {
@@ -1989,12 +2087,12 @@ function renderLeaderboard(allData, myName, myPhone, myScore) {
     }
     if (myRankNum) myRankNum.textContent = myRank > 0 ? '#' + myRank : '#-';
 
-    // 顯示頭 10 位
-    var top10 = allData.slice(0, 10);
+// 🌟 顯示頭 20 位
+    var top20 = allData.slice(0, 20);
     var html = '';
     var medals = ['🥇', '🥈', '🥉'];
-    for (var j = 0; j < top10.length; j++) {
-        var entry = top10[j];
+    for (var j = 0; j < top20.length; j++) {
+        var entry = top20[j];
         var rank = j + 1;
         var medal = medals[j] || ('#' + rank);
         var isMe = (entry.name === myName && entry.phone === myPhone && entry.score === myScore);
@@ -2009,19 +2107,19 @@ function renderLeaderboard(allData, myName, myPhone, myScore) {
     }
     list.innerHTML = html;
 
-    // 如果自己在頭 10 外，在最底展示自己
-    if (myRank > 10 && myRank > 0) {
-        myRankRow.style.display = 'block';
-        myRankRow.innerHTML = '<div style="display:flex; align-items:center;">' +
-            '<span style="width:36px; font-size:1em; text-align:center; color:#ffd700;">#' + myRank + '</span>' +
-            '<span style="flex:1; font-size:0.9em; color:#ffd700; font-weight:bold;">' + myName + '</span>' +
-            '<span style="width:80px; font-size:0.8em; color:rgba(255,255,255,0.6); text-align:center;">' + maskPhone(myPhone) + '</span>' +
-            '<span style="width:70px; font-size:0.95em; color:#ffd700; font-weight:bold; text-align:right;">' + myScore + '</span>' +
-            '</div>';
-    } else {
-        myRankRow.style.display = 'none';
+// 如果自己在頭 20 外，在最底展示自己
+        if (myRank > 20 && myRank > 0) {
+            myRankRow.style.display = 'block';
+            myRankRow.innerHTML = '<div style="display:flex; align-items:center;">' +
+                '<span style="width:36px; font-size:1em; text-align:center; color:#ffd700;">#' + myRank + '</span>' +
+                '<span style="flex:1; font-size:0.9em; color:#ffd700; font-weight:bold;">' + myName + '</span>' +
+                '<span style="width:80px; font-size:0.8em; color:rgba(255,255,255,0.6); text-align:center;">' + maskPhone(myPhone) + '</span>' +
+                '<span style="width:70px; font-size:0.95em; color:#ffd700; font-weight:bold; text-align:right;">' + myScore + '</span>' +
+                '</div>';
+        } else {
+            myRankRow.style.display = 'none';
+        }
     }
-}
 
 // ========== END GAME ==========
 function endGame() {
@@ -2048,7 +2146,19 @@ document.getElementById('endScreen').style.display = 'flex';
   if (document.getElementById('xpBox')) document.getElementById('xpBox').style.display = 'none';
 }
 function resetToStart() { 
-    location.reload(); 
+    // 🌟 1. 隱藏結束畫面
+    document.getElementById('endScreen').style.display = 'none';
+    
+    // 🌟 2. 重新鋪設賽道、重置車輛及環境障礙物
+    resetRoad();
+    
+    // 🌟 3. 將玩家推回起點
+    playerX = 0;
+    position = 0;
+    speed = 0;
+    
+    // 🌟 4. 直入 Loading 動畫 (動畫完結後會自動呼叫 startGame()，分數同計時會自動 Reset)
+    showGameLoading();
 }
 
 		  // 🌟 動態適應手機螢幕大小
@@ -2664,11 +2774,29 @@ function renderCollectiblesInSegment(segment, segmentDrawIndex) {
       resetSprites(); 
       resetCars();
 
-      segments[findSegment(playerZ).index + 2].color = COLORS.START; 
-      segments[findSegment(playerZ).index + 3].color = COLORS.START;
+ // 🌟 起點：真正的黑白格仔線 (保留原本草地)
+      var startIndex = findSegment(playerZ).index;
+      for (var n = 0; n < 6; n++) {
+          var seg = segments[(startIndex + 2 + n) % segments.length];
+          seg.color = { 
+              road: seg.color.road, 
+              grass: seg.color.grass,     // 保留綠色草地
+              rumble: seg.color.rumble,   // 保留紅白邊
+              checker: true,              // 啟動格仔模式
+              checkerReverse: (n % 2 !== 0) // 每一行黑白相反，形成格仔
+          };
+      }
       
-      for(var n = 0 ; n < rumbleLength ; n++) {
-          segments[segments.length-1-n].color = COLORS.FINISH;
+      // 🌟 終點：真正的黑白格仔線
+      for(var n = 0 ; n < rumbleLength * 2 ; n++) {
+          var seg = segments[segments.length - 1 - n];
+          seg.color = { 
+              road: seg.color.road, 
+              grass: seg.color.grass, 
+              rumble: seg.color.rumble, 
+              checker: true, 
+              checkerReverse: (n % 2 !== 0) 
+          };
       }
       
       trackLength = segments.length * segmentLength;
@@ -2726,9 +2854,19 @@ function renderCollectiblesInSegment(segment, segmentDrawIndex) {
     function resetCars() {
       cars = []; 
       var n, car, segment, offset, z, sprite, speed;
+      
+      // 🌟 1. 將整條賽道平均劃分，計出每架車嘅基本間距
+      var spacing = Math.floor(segments.length / totalCars);
+      
       for (n = 0 ; n < totalCars ; n++) {
         offset = Math.random() * Util.randomChoice([-0.8, 0.8]); 
-        z = Math.floor(Math.random() * segments.length) * segmentLength;
+        
+        // 🌟 2. 確保分佈平均：基於間距分配位置，再加上少少隨機偏移 (Jitter) 令佢睇落自然啲
+        var baseSegment = Math.floor(n * spacing);
+        var randomJitter = Math.floor(Math.random() * spacing * 0.7); // 容許在 70% 嘅間距內隨機走位
+        var segmentIndex = (baseSegment + randomJitter) % segments.length;
+        z = segmentIndex * segmentLength;
+        
         sprite = Util.randomChoice(SPRITES.CARS); 
         speed  = maxSpeed/4 + Math.random() * maxSpeed/(sprite == SPRITES.SEMI ? 4 : 2);
         car = { offset: offset, z: z, sprite: sprite, speed: speed }; 
